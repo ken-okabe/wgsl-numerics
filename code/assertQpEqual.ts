@@ -1,5 +1,3 @@
-// assertQpEqual.ts (Final Corrected Version using BigInt)
-
 export type QuadFloat = [number, number, number, number];
 
 // 小数点以下の精度を35桁まで保持するスケーリングファクター

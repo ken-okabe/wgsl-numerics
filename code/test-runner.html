@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>WGSL Numerics - E2E Test Runner</title>
+</head>
+<body>
+    <h1>WGSL Numerics - E2E Test Runner (Graceful Shutdown)</h1>
+    <script type="module">
+        console.log("[Browser] Script started. Connecting to WebSocket...");
+        const ws = new WebSocket(`ws://${location.host}`);
+
+        ws.onopen = () => console.log("[Browser] WebSocket connection opened.");
+        ws.onclose = () => console.log("[Browser] WebSocket connection closed.");
+        ws.onerror = (err) => console.error("[Browser] WebSocket error:", err);
+
+        ws.onmessage = async (event) => {
+            const testData = JSON.parse(event.data);
+
+            // サーバーからの終了コマンドを処理
+            if (testData.command === 'close') {
+                console.log("[Browser] Received close command. Closing WebSocket.");
+                ws.close();
+                return;
+            }
+
+            console.log("[Browser] Received test command:", testData.kernelEntryPoint);
+            try {
+                const result = await runGpuTest(testData);
+                const resultString = Array.from(result).join(',');
+                ws.send(JSON.stringify({ result: resultString }));
+            } catch (e) {
+                const errorMessage = `GPU_EXECUTION_ERROR: ${e.message}`;
+                console.error(`[Browser] An error occurred during GPU execution:`, e);
+                ws.send(JSON.stringify({ result: errorMessage }));
+            }
+        };
+
+        async function runGpuTest({ wgslCode, kernelEntryPoint, input }) {
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) throw new Error("Failed to get GPU adapter.");
+            
+            const device = await adapter.requestDevice();
+            
+            const shaderModule = device.createShaderModule({ code: wgslCode });
+
+            const isF32Input = typeof input === 'number';
+            const inputData = isF32Input ? [input] : input;
+            const inputBufferSize = isF32Input ? 4 : 16;
+            const outputBufferSize = 16; // QuadFloat is always 16 bytes
+
+            const inputBuffer = device.createBuffer({
+                size: inputBufferSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                mappedAtCreation: true
+            });
+            new Float32Array(inputBuffer.getMappedRange()).set(inputData);
+            inputBuffer.unmap();
+
+            const outputBuffer = device.createBuffer({
+                size: outputBufferSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+            });
+            
+            const pipeline = await device.createComputePipelineAsync({
+                layout: 'auto',
+                compute: {
+                    module: shaderModule,
+                    entryPoint: kernelEntryPoint
+                }
+            });
+            
+            const bindGroup = device.createBindGroup({
+                layout: pipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: { buffer: inputBuffer } },
+                    { binding: 1, resource: { buffer: outputBuffer } }
+                ]
+            });
+            
+            const commandEncoder = device.createCommandEncoder();
+            const pass = commandEncoder.beginComputePass();
+            pass.setPipeline(pipeline);
+            pass.setBindGroup(0, bindGroup);
+            pass.dispatchWorkgroups(1);
+            pass.end();
+            
+            const gpuReadBuffer = device.createBuffer({
+                size: outputBufferSize,
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+            });
+            commandEncoder.copyBufferToBuffer(outputBuffer, 0, gpuReadBuffer, 0, outputBufferSize);
+            device.queue.submit([commandEncoder.finish()]);
+            
+            await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+            const resultArray = new Float32Array(gpuReadBuffer.getMappedRange().slice(0));
+            gpuReadBuffer.unmap();
+            
+            return resultArray;
+        }
+    </script>
+</body>
+</html>
