@@ -23,8 +23,18 @@
                 return;
             }
 
-            console.log("[Browser] Received test command:", testData.kernelEntryPoint);
             try {
+                // ▼▼▼ 修正箇所: 文字列から特殊値を復元 ▼▼▼
+                const deserializedInput = testData.input.map((v) => {
+                    if (v === 'NaN') return NaN;
+                    if (v === 'Infinity') return Infinity;
+                    if (v === '-Infinity') return -Infinity;
+                    if (v === '-0') return -0;
+                    return v;
+                });
+                testData.input = deserializedInput;
+                // ▲▲▲ 修正箇所 ▲▲▲
+
                 const result = await runGpuTest(testData);
                 const resultString = Array.from(result).join(',');
                 ws.send(JSON.stringify({ result: resultString }));
@@ -36,42 +46,31 @@
         };
 
         async function runGpuTest({ wgslCode, kernelEntryPoint, input }) {
+            if (!navigator.gpu) {
+                throw new Error("WebGPU not supported on this browser.");
+            }
             const adapter = await navigator.gpu.requestAdapter();
             if (!adapter) throw new Error("Failed to get GPU adapter.");
-            
+
             const device = await adapter.requestDevice();
-            
             const shaderModule = device.createShaderModule({ code: wgslCode });
 
-            // --- Explicit Layout Definition ---
-            // Define the memory layout we EXPECT the pipeline to have.
             const bindGroupLayout = device.createBindGroupLayout({
                 entries: [
-                    {
-                        binding: 0,
-                        visibility: GPUShaderStage.COMPUTE,
-                        buffer: { type: 'read-only-storage' }
-                    },
-                    {
-                        binding: 1,
-                        visibility: GPUShaderStage.COMPUTE,
-                        buffer: { type: 'storage' }
-                    }
+                    { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+                    { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }
                 ]
             });
-            
+
             const pipeline = await device.createComputePipelineAsync({
                 layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-                compute: {
-                    module: shaderModule,
-                    entryPoint: kernelEntryPoint
-                }
+                compute: { module: shaderModule, entryPoint: kernelEntryPoint }
             });
-            // --- End of Layout Definition ---
+
+            const inputData = Array.isArray(input) ? input : [input];
             
-            const inputData = typeof input === 'number' ? [input] : input;
-            const inputBufferSize = inputData.length * 4;
-            const outputBufferSize = 16; // QuadFloat is always 16 bytes
+            const inputBufferSize = Math.max(16, inputData.length * 4);
+            const outputBufferSize = 16;
 
             const inputBuffer = device.createBuffer({
                 size: inputBufferSize,
@@ -85,33 +84,37 @@
                 size: outputBufferSize,
                 usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
             });
-            
+
             const bindGroup = device.createBindGroup({
-                layout: bindGroupLayout, // Use the same explicit layout
+                layout: bindGroupLayout,
                 entries: [
                     { binding: 0, resource: { buffer: inputBuffer } },
-                    { binding:1, resource: { buffer: outputBuffer } }
+                    { binding: 1, resource: { buffer: outputBuffer } }
                 ]
             });
-            
+
             const commandEncoder = device.createCommandEncoder();
             const pass = commandEncoder.beginComputePass();
             pass.setPipeline(pipeline);
             pass.setBindGroup(0, bindGroup);
             pass.dispatchWorkgroups(1);
             pass.end();
-            
+
             const gpuReadBuffer = device.createBuffer({
                 size: outputBufferSize,
                 usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
             });
             commandEncoder.copyBufferToBuffer(outputBuffer, 0, gpuReadBuffer, 0, outputBufferSize);
             device.queue.submit([commandEncoder.finish()]);
-            
+
             await gpuReadBuffer.mapAsync(GPUMapMode.READ);
             const resultArray = new Float32Array(gpuReadBuffer.getMappedRange().slice(0));
             gpuReadBuffer.unmap();
             
+            inputBuffer.destroy();
+            outputBuffer.destroy();
+            gpuReadBuffer.destroy();
+
             return resultArray;
         }
     </script>
