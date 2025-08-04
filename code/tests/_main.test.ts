@@ -14,7 +14,7 @@ import * as QualityAssurance from './quality-assurance';
 import * as Diagnostics from './diagnostics';
 import type { TestResult, TestSuiteReport } from './diagnostics';
 
-// --- 実行基盤（変更なし） ---
+// --- 実行基盤 ---
 let server: ReturnType<typeof Bun.serve>;
 let chromeProcess: Subprocess;
 let ws: ServerWebSocket<unknown> | undefined;
@@ -59,7 +59,6 @@ async function runKernelInBrowser(kernelEntryPoint: string, input: number | numb
     try {
         const wgslCode = await Bun.file('code/kernels.wgsl').text();
         
-        // ▼▼▼ 修正箇所: 特殊値を文字列に変換 ▼▼▼
         const serializableInput = (Array.isArray(input) ? input : [input]).map(v => {
             if (Number.isNaN(v)) return 'NaN';
             if (v === Infinity) return 'Infinity';
@@ -67,7 +66,6 @@ async function runKernelInBrowser(kernelEntryPoint: string, input: number | numb
             if (Object.is(v, -0)) return '-0';
             return v;
         });
-        // ▲▲▲ 修正箇所 ▲▲▲
         
         ws.send(JSON.stringify({ wgslCode, kernelEntryPoint, input: serializableInput }));
         const resultRaw = await resultPromise;
@@ -121,13 +119,21 @@ function createSuiteReport(suiteName: string, results: TestResult[]): TestSuiteR
     return { suiteName, totalTests, passedTests, failedTests: totalTests - passedTests, averageExecutionTime, tierBreakdown, results };
 }
 
-// --- メインテストブロック（変更なし） ---
+// --- メインテストブロック ---
 test("WGSL Numerics Test Suite (Functional)", async () => {
     let qaHistory: TestSuiteReport[] = [];
     const testSuites = [
         { name: 'qp_from_f32', operation: 'from_f32', type: 'basic' as OperationType, kernel: 'qp_from_f32_main' },
         { name: 'qp_negate', operation: 'negate', type: 'basic' as OperationType, kernel: 'qp_negate_main' },
         { name: 'qp_add', operation: 'add', type: 'basic' as OperationType, kernel: 'qp_add_main' },
+        { name: 'qp_sub', operation: 'sub', type: 'basic' as OperationType, kernel: 'qp_sub_main' },
+        { name: 'qp_mul', operation: 'mul', type: 'basic' as OperationType, kernel: 'qp_mul_main' },
+        { name: 'qp_div', operation: 'div', type: 'basic' as OperationType, kernel: 'qp_div_main' },
+        { name: 'qp_abs', operation: 'abs', type: 'basic' as OperationType, kernel: 'qp_abs_main' },
+        { name: 'qp_sign', operation: 'sign', type: 'basic' as OperationType, kernel: 'qp_sign_main' },
+        { name: 'qp_floor', operation: 'floor', type: 'basic' as OperationType, kernel: 'qp_floor_main' },
+        { name: 'qp_ceil', operation: 'ceil', type: 'basic' as OperationType, kernel: 'qp_ceil_main' },
+        { name: 'qp_round', operation: 'round', type: 'basic' as OperationType, kernel: 'qp_round_main' },
     ];
     const allTestCases: { suite: typeof testSuites[0], testCase: TestCase }[] = [];
     for (const suite of testSuites) {
@@ -174,5 +180,5 @@ test("WGSL Numerics Test Suite (Functional)", async () => {
     const totalTests = qaHistory.reduce((sum, r) => sum + r.totalTests, 0);
     const overallPassRate = totalTests > 0 ? totalPassed / totalTests : 0;
     console.log(`\nOverall Pass Rate: ${(overallPassRate * 100).toFixed(1)}%`);
-    expect(overallPassRate).toBeGreaterThan(0.85);
-}, { timeout: 60000 });
+    expect(overallPassRate).toBeGreaterThan(0.99); // 100%を目指す
+}, { timeout: 90000 });
