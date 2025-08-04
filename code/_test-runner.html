@@ -5,7 +5,7 @@
     <title>WGSL Numerics - E2E Test Runner</title>
 </head>
 <body>
-    <h1>WGSL Numerics - E2E Test Runner (Graceful Shutdown)</h1>
+    <h1>WGSL Numerics - E2E Test Runner</h1>
     <script type="module">
         console.log("[Browser] Script started. Connecting to WebSocket...");
         const ws = new WebSocket(`ws://${location.host}`);
@@ -17,7 +17,6 @@
         ws.onmessage = async (event) => {
             const testData = JSON.parse(event.data);
 
-            // サーバーからの終了コマンドを処理
             if (testData.command === 'close') {
                 console.log("[Browser] Received close command. Closing WebSocket.");
                 ws.close();
@@ -44,9 +43,34 @@
             
             const shaderModule = device.createShaderModule({ code: wgslCode });
 
-            const isF32Input = typeof input === 'number';
-            const inputData = isF32Input ? [input] : input;
-            const inputBufferSize = isF32Input ? 4 : 16;
+            // --- Explicit Layout Definition ---
+            // Define the memory layout we EXPECT the pipeline to have.
+            const bindGroupLayout = device.createBindGroupLayout({
+                entries: [
+                    {
+                        binding: 0,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: { type: 'read-only-storage' }
+                    },
+                    {
+                        binding: 1,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: { type: 'storage' }
+                    }
+                ]
+            });
+            
+            const pipeline = await device.createComputePipelineAsync({
+                layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+                compute: {
+                    module: shaderModule,
+                    entryPoint: kernelEntryPoint
+                }
+            });
+            // --- End of Layout Definition ---
+            
+            const inputData = typeof input === 'number' ? [input] : input;
+            const inputBufferSize = inputData.length * 4;
             const outputBufferSize = 16; // QuadFloat is always 16 bytes
 
             const inputBuffer = device.createBuffer({
@@ -62,19 +86,11 @@
                 usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
             });
             
-            const pipeline = await device.createComputePipelineAsync({
-                layout: 'auto',
-                compute: {
-                    module: shaderModule,
-                    entryPoint: kernelEntryPoint
-                }
-            });
-            
             const bindGroup = device.createBindGroup({
-                layout: pipeline.getBindGroupLayout(0),
+                layout: bindGroupLayout, // Use the same explicit layout
                 entries: [
                     { binding: 0, resource: { buffer: inputBuffer } },
-                    { binding: 1, resource: { buffer: outputBuffer } }
+                    { binding:1, resource: { buffer: outputBuffer } }
                 ]
             });
             
