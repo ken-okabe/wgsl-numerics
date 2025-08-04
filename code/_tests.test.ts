@@ -27,7 +27,7 @@ beforeAll(async () => {
             fetch(req, server) {
                 const url = new URL(req.url);
                 if (server.upgrade(req)) return;
-                if (url.pathname === "/") return new Response(Bun.file("code/test-runner.html"));
+                if (url.pathname === "/") return new Response(Bun.file("code/_test-runner.html"));
                 return new Response("Not Found", { status: 404 });
             },
             websocket: {
@@ -146,7 +146,7 @@ test("WGSL TDD Cycles", async () => {
         console.log(`[TDD] Verifying Red stage for ${tc.name}...`);
         let didThrowInRed = false;
         try {
-            const actual = await runKernelInBrowser('code/all-kernels.wgsl', `${tc.kernelBaseName}_red`, tc.input);
+            const actual = await runKernelInBrowser('code/kernels.wgsl', `${tc.kernelBaseName}_red`, tc.input);
             assertQpEqual(actual, tc.expected);
         } catch (e) {
             didThrowInRed = true;
@@ -154,7 +154,7 @@ test("WGSL TDD Cycles", async () => {
         expect(didThrowInRed).toBe(true);
         console.log(`[TDD] Red stage for ${tc.name} passed (failed as expected).`);
         console.log(`[TDD] Verifying Green stage for ${tc.name}...`);
-        const actualGreen = await runKernelInBrowser('code/all-kernels.wgsl', `${tc.kernelBaseName}_green`, tc.input);
+        const actualGreen = await runKernelInBrowser('code/kernels.wgsl', `${tc.kernelBaseName}_green`, tc.input);
         assertQpEqual(actualGreen, tc.expected);
         console.log(`[TDD] Green stage for ${tc.name} passed.`);
     }

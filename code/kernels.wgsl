@@ -1,4 +1,4 @@
-// all-kernels.wgsl
+// kernels.wgsl
 // すべてのAPIカーネルを1ファイルに統合
 
 // --- 型定義 ---

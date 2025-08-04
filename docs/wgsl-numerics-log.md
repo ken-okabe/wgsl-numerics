@@ -838,7 +838,7 @@ Ran 67 tests across 2 files. [29.00ms]
 
 「完全なものさし」は手に入った。設計図もある。ならば、やるべきことは一つだ。**TDDサイクルを開始し、仕様書に定義された関数を一つずつ実装し、検証していく。**
 
-`all-kernels.wgsl`は、まだ何一つ実装されていない空っぽの神殿だ。そして`all-tests.test.ts`には、その神殿に柱を一本ずつ立てるための、`test.skip`された数多の挑戦が眠っている。
+`kernels.wgsl`は、まだ何一つ実装されていない空っぽの神殿だ。そして`all-tests.test.ts`には、その神殿に柱を一本ずつ立てるための、`test.skip`された数多の挑戦が眠っている。
 
 ロードマップの推奨順序に従い、最も単純なものから始めよう。手始めに**`qp_negate`**からだ。
 
@@ -848,7 +848,7 @@ Ran 67 tests across 2 files. [29.00ms]
     `all-tests.test.ts`の中から、`qp_negate`に関連するテストブロックを見つけ、`test.skip`を`test`に変更せよ。そして `bun test -t "qp_negate:"` を実行する。当然、カーネルは空なのでテストは**失敗する**。この「赤」の点灯こそ、我々の開発の出発点だ。
 
 2.  **Green (緑): 最小限の実装**
-    `all-kernels.wgsl`内の`qp_negate_main`に、テストをパスさせるためだけの最も単純なロジックを実装する。入力された`QuadFloat`（`vec4<f32>`）の各要素の符号を反転させるだけだ。そして再度テストを実行し、**成功（緑）**することを確認する。
+    `kernels.wgsl`内の`qp_negate_main`に、テストをパスさせるためだけの最も単純なロジックを実装する。入力された`QuadFloat`（`vec4<f32>`）の各要素の符号を反転させるだけだ。そして再度テストを実行し、**成功（緑）**することを確認する。
 
 3.  **Refactor (リファクタリング)**
     今回は単純なため不要かもしれないが、常にこのサイクルを意識する。テストが通る状態を維持したまま、コードをより良く、より効率的にできないか自問する。
@@ -944,9 +944,9 @@ Ran 67 tests across 2 files. [29.00ms]
 
 ### **ステップ2: Green — テストをパスさせる最小限のコードを書く**
 
-次に、`all-kernels.wgsl` に `qp_negate` の最小限のロジックを実装し、テストをパスさせる。
+次に、`kernels.wgsl` に `qp_negate` の最小限のロジックを実装し、テストをパスさせる。
 
-1.  **`all-kernels.wgsl` を以下のように修正せよ:**
+1.  **`kernels.wgsl` を以下のように修正せよ:**
 
       * `QuadFloat` の構造体を定義する。
       * 入力用と出力用のストレージバッファを定義する。
@@ -955,7 +955,7 @@ Ran 67 tests across 2 files. [29.00ms]
     <!-- end list -->
 
     ```wgsl
-    // all-kernels.wgsl
+    // kernels.wgsl
 
     // --- Type Definitions (can be in a shared file later) ---
     struct QuadFloat {
