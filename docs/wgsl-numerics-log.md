@@ -50,6 +50,8 @@ $$|A - B| < \epsilon \cdot \max(|A|, |B|)$$
 2.  **`assertQpEqual`本体の実装:** 上記のヘルパーを使い、相対誤差比較ロジックを実装します。`A`または`B`がゼロに近い場合の例外処理も厳密に定義する必要があります。
 3.  **境界値テスト:** `NaN`, `Infinity`, `0`, `-0` といった境界値の扱いを、仕様書 (`wgsl-numerics.md`) に基づき、この関数で明確に定義し、テストします。
 
+### ここ仕様にあるDebug=LV1　が抜けてる
+
 ---
 
 ### ### **第二段階：基本演算 (`add`, `mul`) のTDD実践**
@@ -1428,8 +1430,8 @@ export function generateTier3Cases(operation:string): TestCase[] { /*...*/ }
 
 ```typescript
 export class QualityAssuranceMonitor {
-    private testHistory: TestSuiteReport[] = [];
-    recordTestResult(report: TestSuiteReport) {
+    private testHistory: TestFunctionReport[] = [];
+    recordTestResult(report: TestFunctionReport) {
         this.testHistory.push(report);
         this.analyzeQualityTrends(); // 内部状態を直接変更
     }
@@ -1441,16 +1443,16 @@ export class QualityAssuranceMonitor {
 ```typescript
 // 状態（history）を引数で受け取り、新しい状態と分析結果を返す
 export function analyzeHistory(
-    currentHistory: TestSuiteReport[],
-    newReport: TestSuiteReport
-): { newHistory: TestSuiteReport[]; warnings: string[] } {
+    currentHistory: TestFunctionReport[],
+    newReport: TestFunctionReport
+): { newHistory: TestFunctionReport[]; warnings: string[] } {
     const newHistory = [...currentHistory, newReport];
     const warnings = [];
     // 品質低下や性能劣化を分析し、warnings配列に追加...
     return { newHistory, warnings };
 }
 
-export function generateQualityReport(history: TestSuiteReport[]): string {
+export function generateQualityReport(history: TestFunctionReport[]): string {
     // 受け取った履歴データからレポート文字列を生成するだけ
     /*...*/
 }
@@ -1487,19 +1489,19 @@ async function runKernelInBrowser(/*...*/) {/* ... */}
 // -----------------------------------------------------------------
 
 
-test("WGSL Numerics Test Suite (Functional)", async () => {
+test("WGSL Numerics Test Func (Functional)", async () => {
     // --- 状態の初期化 ---
     // 全てのテスト結果と品質監視の履歴をここで一元管理
     const allResults: TestResult[] = [];
-    let qaHistory: TestSuiteReport[] = [];
+    let qaHistory: TestFunctionReport[] = [];
 
-    const testSuites = [
+    const TestFunctions = [
         { name: 'qp_negate', operation: 'negate', kernel: 'qp_negate_main' },
         // ... 他のテストスイート
     ];
 
-    for (const suite of testSuites) {
-        console.log(`\n=== Executing Suite: ${suite.name} ===`);
+    for (const suite of TestFunctions) {
+        console.log(`\n=== Executing Func: ${suite.name} ===`);
         const suiteResults: TestResult[] = [];
 
         // 1. テストケースを「生成」
@@ -1519,7 +1521,7 @@ test("WGSL Numerics Test Suite (Functional)", async () => {
         }
 
         // 3. テストスイートの結果を集計
-        const suiteReport = createSuiteReport(suite.name, suiteResults);
+        const suiteReport = createFuncReport(suite.name, suiteResults);
         allResults.push(...suiteResults);
 
         // 4. 品質を「分析」し、「状態を更新」
@@ -1545,7 +1547,7 @@ test("WGSL Numerics Test Suite (Functional)", async () => {
 
 }, { timeout: 60000 });
 
-// (executeSingleTestCaseやcreateSuiteReportなどのヘルパー関数は別途定義)
+// (executeSingleTestCaseやcreateFuncReportなどのヘルパー関数は別途定義)
 ```
 
 ### この提案の利点
@@ -1569,7 +1571,7 @@ bun test v1.2.13 (64ed68c9)
 
 code/tests/_main.test.ts:
 
---- Executing Suite: qp_from_f32 ---
+--- Executing Func: qp_from_f32 ---
 [1/36] Running from_f32_tier1_exact_-1024... ✅ Passed (32.18ms)
 [2/36] Running from_f32_tier1_exact_-1... ✅ Passed (23.08ms)
 [3/36] Running from_f32_tier1_exact_0... ✅ Passed (22.78ms)
@@ -1604,7 +1606,7 @@ Actual:   [0, 0, 0, 0]
 --- Recommended Actions ---
 • Check for floating point inaccuracies or rounding errors. Consider if the tolerance for this tier is appropriate.
 
---- Executing Suite: qp_negate ---
+--- Executing Func: qp_negate ---
 [18/36] Running negate_tier1_exact_-1024... ✅ Passed (25.86ms)
 [19/36] Running negate_tier1_exact_-1... ✅ Passed (29.00ms)
 [20/36] Running negate_tier1_exact_0... ❌ Failed
@@ -1655,13 +1657,13 @@ Actual:   [0, 0, 0, 0]
 • Check for floating point inaccuracies or rounding errors. Consider if the tolerance for this tier is appropriate.
 [34/36] Running negate_tier3_stress_-Zero... ✅ Passed (23.80ms)
 
---- Executing Suite: qp_add ---
+--- Executing Func: qp_add ---
 [35/36] Running add_tier1_exact_1.5_0.25... ✅ Passed (33.52ms)
 [36/36] Running add_tier2_practical_1.0_0.1... ✅ Passed (34.45ms)
 
 
 --- FINAL QUALITY REPORT ---
---- Quality Assurance Report for Suite: qp_from_f32 ---
+--- Quality Assurance Report for Func: qp_from_f32 ---
 Latest Run: 16/17 passed (94.1%)
 Average Execution Time: 24.07ms
 
@@ -1669,7 +1671,7 @@ Average Execution Time: 24.07ms
   Tier 1: 7/7 (100.0%)
   Tier 2: 4/4 (100.0%)
   Tier 3: 5/6 (83.3%)
---- Quality Assurance Report for Suite: qp_negate ---
+--- Quality Assurance Report for Func: qp_negate ---
 Latest Run: 15/17 passed (88.2%)
 Average Execution Time: 26.53ms
 
@@ -1677,7 +1679,7 @@ Average Execution Time: 26.53ms
   Tier 1: 6/7 (85.7%)
   Tier 2: 4/4 (100.0%)
   Tier 3: 5/6 (83.3%)
---- Quality Assurance Report for Suite: qp_add ---
+--- Quality Assurance Report for Func: qp_add ---
 Latest Run: 2/2 passed (100.0%)
 Average Execution Time: 33.98ms
 
@@ -1686,7 +1688,7 @@ Average Execution Time: 33.98ms
   Tier 2: 1/1 (100.0%)
 
 Overall Pass Rate: 91.7%
-✓ WGSL Numerics Test Suite (Functional) [950.04ms]
+✓ WGSL Numerics Test Func (Functional) [950.04ms]
 
  1 pass
  0 fail
@@ -1737,7 +1739,7 @@ bun test v1.2.13 (64ed68c9)
 
 code/tests/_main.test.ts:
 
---- Executing Suite: qp_from_f32 ---
+--- Executing Func: qp_from_f32 ---
 [1/36] Running from_f32_tier1_exact_-1024... ✅ Passed (35.88ms)
 [2/36] Running from_f32_tier1_exact_-1... ✅ Passed (25.28ms)
 [3/36] Running from_f32_tier1_exact_0... ✅ Passed (26.89ms)
@@ -1756,7 +1758,7 @@ code/tests/_main.test.ts:
 [16/36] Running from_f32_tier3_stress_Zero... ✅ Passed (25.36ms)
 [17/36] Running from_f32_tier3_stress_-Zero... ✅ Passed (26.87ms)
 
---- Executing Suite: qp_negate ---
+--- Executing Func: qp_negate ---
 [18/36] Running negate_tier1_exact_-1024... ✅ Passed (27.20ms)
 [19/36] Running negate_tier1_exact_-1... ✅ Passed (27.28ms)
 [20/36] Running negate_tier1_exact_0... ✅ Passed (35.39ms)
@@ -1775,13 +1777,13 @@ code/tests/_main.test.ts:
 [33/36] Running negate_tier3_stress_Zero... ✅ Passed (28.09ms)
 [34/36] Running negate_tier3_stress_-Zero... ✅ Passed (26.92ms)
 
---- Executing Suite: qp_add ---
+--- Executing Func: qp_add ---
 [35/36] Running add_tier1_exact_1.5_0.25... ✅ Passed (43.68ms)
 [36/36] Running add_tier2_practical_1.0_0.1... ✅ Passed (40.30ms)
 
 
 --- FINAL QUALITY REPORT ---
---- Quality Assurance Report for Suite: qp_from_f32 ---
+--- Quality Assurance Report for Func: qp_from_f32 ---
 Latest Run: 17/17 passed (100.0%)
 Average Execution Time: 25.82ms
 
@@ -1789,7 +1791,7 @@ Average Execution Time: 25.82ms
   Tier 1: 7/7 (100.0%)
   Tier 2: 4/4 (100.0%)
   Tier 3: 6/6 (100.0%)
---- Quality Assurance Report for Suite: qp_negate ---
+--- Quality Assurance Report for Func: qp_negate ---
 Latest Run: 17/17 passed (100.0%)
 Average Execution Time: 28.11ms
 
@@ -1797,7 +1799,7 @@ Average Execution Time: 28.11ms
   Tier 1: 7/7 (100.0%)
   Tier 2: 4/4 (100.0%)
   Tier 3: 6/6 (100.0%)
---- Quality Assurance Report for Suite: qp_add ---
+--- Quality Assurance Report for Func: qp_add ---
 Latest Run: 2/2 passed (100.0%)
 Average Execution Time: 41.99ms
 
@@ -1806,7 +1808,7 @@ Average Execution Time: 41.99ms
   Tier 2: 1/1 (100.0%)
 
 Overall Pass Rate: 100.0%
-✓ WGSL Numerics Test Suite (Functional) [1024.04ms]
+✓ WGSL Numerics Test Func (Functional) [1024.04ms]
 
  1 pass
  0 fail
@@ -1820,3 +1822,98 @@ Ran 1 tests across 1 files. [1.56s]
 # **WGSL-Numerics Enhanced Testing Framework v2.0**
 
 `wgsl-numerics-enanced-spac.md` を必読すること！！
+
+
+
+---
+
+### WGSL Numerics 進捗サマリー
+
+**全体進捗率 (関数実装ベース): 約34%**
+
+### ✅ **完了済み (11 / 32)**
+
+**1. テストフレームワーク「Numeris-Test」**
+
+-   WGSLカーネルの自動実行・検証パイプライン (E2Eテスト基盤)
+    
+-   `BigInt`ベースの高信頼なアサーション (`assertQpEqual`)
+    
+-   網羅的なテストケース自動生成
+    
+-   品質低下を検知するQAシステム
+    
+
+**2. `qp_` (基本演算) API**
+
+-   `qp_from_f32` (f32からの変換)
+    
+-   `qp_negate` (符号反転)
+    
+-   `qp_add` (加算)
+    
+-   `qp_sub` (減算)
+    
+-   `qp_mul` (乗算)
+    
+-   `qp_div` (除算)
+    
+-   `qp_abs` (絶対値)
+    
+-   `qp_sign` (符号関数)
+    
+-   `qp_floor` (床関数)
+    
+-   `qp_ceil` (天井関数)
+    
+-   `qp_round` (丸め)
+    
+
+### ⏳ **残存タスク (21 / 32)**
+
+**1. `qp_` (拡張数学関数) API**
+
+-   **基本関数グループ (相互依存なし)**
+    
+    -   `qp_sqrt` (平方根)
+        
+    -   `qp_fma` (融合積和演算)
+        
+-   **指数・対数関数グループ (実装順推奨)**
+    
+    -   `qp_log` (自然対数)
+        
+    -   `qp_exp` (指数関数)
+        
+    -   `qp_pow` (べき乗) - `log`と`exp`に依存
+        
+-   **三角関数グループ (相互依存なし)**
+    
+    -   `qp_sin` (正弦)
+        
+    -   `qp_cos` (余弦)
+        
+    -   `qp_atan2` (逆正接)
+        
+
+**2. `qla_` (線形代数) API**
+
+-   データ構造定義 (`QVector`, `QMatrix`)
+    
+-   ベクトル演算 (内積、ノルムなど10関数)
+    
+
+**3. `qna_` (数値アルゴリズム) API**
+
+-   `qna_eigen_jacobi` (固有値分解)
+    
+-   `qna_svd` (特異値分解)
+    
+-   `qna_interpolate_linear` (線形補間)
+    
+
+**4. ライブラリ最終化**
+
+-   TypeScriptラッパーの実装
+    
+-   ドキュメントと使用例の整備

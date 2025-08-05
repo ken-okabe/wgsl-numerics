@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WGSL Numerics - E2E Test Runner (Debug Mode)</title>
+</head>
+
+<body>
+    <h1>WGSL Numerics - E2E Test Runner (Debug Mode)</h1>
+    <p>Check the developer console (F12) for logs.</p>
+    <script type="module">
+        console.log("[Browser] Script started. Attempting to connect to WebSocket...");
+        const ws = new WebSocket(`ws://${location.host}`);
+
+        ws.onopen = () => console.log("[Browser] ✅ WebSocket connection successfully opened.");
+        ws.onclose = () => console.log("[Browser] ℹ️ WebSocket connection closed.");
+        ws.onerror = (err) => console.error("[Browser] ❌ WebSocket error:", err);
+
+        ws.onmessage = async (event) => {
+            console.log("[Browser] 📩 Message received from server:", event.data);
+            const testData = JSON.parse(event.data);
+
+            if (testData.command === 'close') {
+                console.log("[Browser] Received close command. Closing WebSocket.");
+                ws.close();
+                return;
+            }
+
+            try {
+                console.log("[Browser] Deserializing input data...");
+                const deserializedInput = testData.input.map((v) => {
+                    if (v === 'NaN') return NaN;
+                    if (v === 'Infinity') return Infinity;
+                    if (v === '-Infinity') return -Infinity;
+                    if (v === '-0') return -0;
+                    return v;
+                });
+                testData.input = deserializedInput;
+                console.log("[Browser] Deserialized input:", testData.input);
+
+                console.log(`[Browser] 🚀 Starting GPU test for kernel: ${testData.kernelEntryPoint}`);
+                const result = await runGpuTest(testData);
+                const resultString = Array.from(result).join(',');
+
+                console.log(`[Browser] ✅ GPU test finished. Sending result: ${resultString}`);
+                ws.send(JSON.stringify({ result: resultString }));
+
+            } catch (e) {
+                const errorMessage = `GPU_EXECUTION_ERROR: ${e.message}`;
+                console.error(`[Browser] ❌ An error occurred during GPU execution:`, e);
+                ws.send(JSON.stringify({ result: errorMessage }));
+            }
+        };
+
+        async function runGpuTest({ wgslCode, kernelEntryPoint, input }) {
+            console.log("[GPU Test] Checking for WebGPU support...");
+            if (!navigator.gpu) throw new Error("WebGPU not supported on this browser.");
+
+            console.log("[GPU Test] Requesting GPU adapter...");
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) throw new Error("Failed to get GPU adapter.");
+            console.log("[GPU Test] Adapter acquired.");
+
+            console.log("[GPU Test] Requesting GPU device...");
+            const device = await adapter.requestDevice();
+            console.log("[GPU Test] Device acquired.");
+
+            console.log("[GPU Test] Creating shader module...");
+            const shaderModule = device.createShaderModule({ code: wgslCode });
+            console.log("[GPU Test] Shader module created.");
+
+            const bindGroupLayout = device.createBindGroupLayout({
+                entries: [
+                    { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+                    { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }
+                ]
+            });
+
+            console.log("[GPU Test] Creating compute pipeline...");
+            const pipeline = await device.createComputePipelineAsync({
+                layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+                compute: { module: shaderModule, entryPoint: kernelEntryPoint }
+            });
+            console.log("[GPU Test] Compute pipeline created.");
+
+            const inputData = Array.isArray(input) ? input : [input];
+            const inputBufferSize = Math.max(16, inputData.length * 4);
+            const outputBufferSize = 16;
+
+            console.log("[GPU Test] Creating buffers...");
+            const inputBuffer = device.createBuffer({
+                size: inputBufferSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                mappedAtCreation: true
+            });
+            new Float32Array(inputBuffer.getMappedRange()).set(inputData);
+            inputBuffer.unmap();
+
+            const outputBuffer = device.createBuffer({ size: outputBufferSize, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+            console.log("[GPU Test] Buffers created.");
+
+            console.log("[GPU Test] Creating bind group...");
+            const bindGroup = device.createBindGroup({
+                layout: bindGroupLayout,
+                entries: [
+                    { binding: 0, resource: { buffer: inputBuffer } },
+                    { binding: 1, resource: { buffer: outputBuffer } }
+                ]
+            });
+            console.log("[GPU Test] Bind group created.");
+
+            console.log("[GPU Test] Encoding and submitting commands...");
+            const commandEncoder = device.createCommandEncoder();
+            const pass = commandEncoder.beginComputePass();
+            pass.setPipeline(pipeline);
+            pass.setBindGroup(0, bindGroup);
+            pass.dispatchWorkgroups(1);
+            pass.end();
+
+            const gpuReadBuffer = device.createBuffer({ size: outputBufferSize, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+            commandEncoder.copyBufferToBuffer(outputBuffer, 0, gpuReadBuffer, 0, outputBufferSize);
+            device.queue.submit([commandEncoder.finish()]);
+            console.log("[GPU Test] Commands submitted to queue.");
+
+            console.log("[GPU Test] Awaiting GPU results...");
+            await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+            const resultArray = new Float32Array(gpuReadBuffer.getMappedRange().slice(0));
+            gpuReadBuffer.unmap();
+
+            inputBuffer.destroy();
+            outputBuffer.destroy();
+            gpuReadBuffer.destroy();
+            console.log("[GPU Test] Buffers destroyed, returning result.");
+
+            return resultArray;
+        }
+    </script>
+</body>
+
+</html>

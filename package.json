@@ -5,8 +5,10 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^24.1.0",
+    "@types/decimal.js": "^7.4.3",
+    "@types/node": "^24.2.0",
     "@webgpu/types": "^0.1.64",
+    "decimal.js": "^10.6.0",
     "vitest": "^3.2.4"
   },
   "peerDependencies": {

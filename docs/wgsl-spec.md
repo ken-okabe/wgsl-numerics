@@ -29,7 +29,7 @@ Myles C. Maxfield (Apple Inc.)
 dan sinclair (Google)
 Participate:
 File an issue (open issues)
-Test Suite:
+Test Func:
 WebGPU CTS shader/
 Copyright © 2025 World Wide Web Consortium. W3C® liability, trademark and permissive document license rules apply.
 
