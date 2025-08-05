@@ -1,4 +1,4 @@
-// code/tests/framework/quality-assurance.ts (Reintegrated Version)
+// code/tests/framework/quality-assurance.ts (Final Corrected Version)
 
 import type { TestResult, TestSuiteReport } from './diagnostics';
 import type { TestTier } from '../LV0_Axiom/assert';
@@ -62,8 +62,10 @@ export function generateSuiteReport(suiteName: string, results: TestResult[]): T
     };
 }
 
+
 /**
- * ▼▼▼ 再統合: テスト履歴全体から品質トレンドを含むサマリーレポートを生成する ▼▼▼
+ * テスト履歴全体から品質トレンドを含むサマリーレポートを生成する
+ * (Possibly 'undefined'エラーを全て修正)
  */
 export function generateQualityReport(history: TestSuiteReport[]): string {
     if (history.length === 0) {
@@ -75,14 +77,22 @@ export function generateQualityReport(history: TestSuiteReport[]): string {
 
     // スイートごとに履歴をグループ化
     for (const report of history) {
-        if (!reportBySuite[report.suiteName]) {
-            reportBySuite[report.suiteName] = [];
+        // ▼▼▼ 修正箇所: より堅牢で型安全なロジックに修正 ▼▼▼
+        let suiteHistoryArray = reportBySuite[report.suiteName];
+        if (!suiteHistoryArray) {
+            suiteHistoryArray = [];
+            reportBySuite[report.suiteName] = suiteHistoryArray;
         }
-        reportBySuite[report.suiteName].push(report);
+        suiteHistoryArray.push(report);
+        // ▲▲▲ 修正箇所 ▲▲▲
     }
 
     for (const suiteName in reportBySuite) {
         const suiteHistory = reportBySuite[suiteName];
+        if (!suiteHistory || suiteHistory.length === 0) {
+            continue;
+        }
+
         const latest = suiteHistory[suiteHistory.length - 1];
         if (!latest) continue;
 

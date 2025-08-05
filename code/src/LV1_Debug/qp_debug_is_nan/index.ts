@@ -1,18 +1,21 @@
-import type { QuadFloat } from '../../../tests/LV0_Axiom/assert';
+// code/src/LV1_Debug/qp_debug_is_nan/index.ts (Corrected)
+
+import type { OperationType } from '../../../tests/LV0_Axiom/assert';
+import { Decimal } from 'decimal.js';
 
 // メタデータ
 export const name = 'qp_debug_is_nan';
 export const type = 'unary' as const;
+export const operationType = 'basic' as OperationType;
 
-// 神託関数（ロジック）をデフォルトエクスポートする
-export default (inputs: QuadFloat[]): QuadFloat => {
-    // ▼▼▼ 修正箇所 ▼▼▼
+// ▼▼▼ 修正箇所: 神託関数がDecimalを扱うようにする ▼▼▼
+export default (inputs: Decimal[]): Decimal => {
     const input = inputs[0];
     if (!input) {
         throw new Error("Invalid input for qp_debug_is_nan oracle: input array is empty.");
     }
-    // ▲▲▲ 修正箇所 ▲▲▲
     
-    const isNan = Number.isNaN(input[0]);
-    return [isNan ? 1.0 : 0.0, 0, 0, 0];
+    const isNan = input.isNaN();
+    return new Decimal(isNan ? 1.0 : 0.0);
 };
+// ▲▲▲ 修正箇所 ▲▲▲

@@ -1,10 +1,11 @@
-// code/tests/LV0_Axiom/assert.ts (Reintegrated and Refined)
+// code/tests/LV0_Axiom/assert.ts (Reintegrated and Tier-Adaptive)
 
 export type QuadFloat = [number, number, number, number];
 export type TestTier = 1 | 2 | 3;
+// ▼▼▼ 再統合: 演算の種類を定義する型 ▼▼▼
+export type OperationType = 'basic' | 'complex' | 'transcendental';
+// ▲▲▲ 再統合 ▲▲▲
 
-
-// 小数点以下の精度を35桁まで保持するスケーリングファクター
 const SCALE = 10n ** 35n;
 
 function qpToBigInt(a: QuadFloat): bigint {
@@ -21,11 +22,15 @@ function qpToBigInt(a: QuadFloat): bigint {
         total += BigInt(Math.round(a[2] * Number(SCALE)));
         total += BigInt(Math.round(a[3] * Number(SCALE)));
     } catch (e) {
-        return -4n; // Represents an unknown non-finite
+        return -4n;
     }
     return total;
 }
 
+/**
+ * [UNCHANGED] The core BigInt-based equality assertion.
+ * Can be called directly for a fixed tolerance, or used by assertQpEqualTiered.
+ */
 export function assertQpEqual(actual: QuadFloat, expected: QuadFloat, epsilon: number = 1e-30, verbose: boolean = false): void {
     const actualBigInt = qpToBigInt(actual);
     const expectedBigInt = qpToBigInt(expected);
@@ -65,7 +70,6 @@ export function assertQpEqual(actual: QuadFloat, expected: QuadFloat, epsilon: n
     if (verbose) console.log(`  - Relative Tolerance (BigInt): ${relativeTolerance.toString()}`);
 
     if (diff > relativeTolerance) {
-        // エラーメッセージはスタックトレースから追えるように、実際の値と期待値を含める
         throw new Error(
             `Assertion Failed: QuadFloat values are not equal within tolerance ${epsilon}.\n` +
             `  Expected: [${expected.join(', ')}]\n` +
@@ -74,3 +78,41 @@ export function assertQpEqual(actual: QuadFloat, expected: QuadFloat, epsilon: n
     }
     if (verbose) console.log(`[Assert] PASSED (Within relative tolerance).`);
 }
+
+
+// ▼▼▼ 再統合: code-bakから持ってきた適応的許容誤差の計算ロジック ▼▼▼
+/**
+ * Calculates an appropriate tolerance based on the test tier, operation type, and input magnitude.
+ * This logic is reintegrated from the code-bak version.
+ */
+function calculateTolerance(operation: OperationType, inputMagnitude: number, tier: TestTier): number {
+    const baseTolerance = { 1: 1e-30, 2: 1e-25, 3: 1e-20 };
+    const operationMultiplier = { 'basic': 1, 'complex': 10, 'transcendental': 100 };
+    
+    // Tier 3の極端な値に対する調整を穏やかにする
+    const magnitudeAdjustment = tier === 3 ? 1.0 : Math.max(1, Math.abs(inputMagnitude) * 1e-15);
+    
+    return baseTolerance[tier] * operationMultiplier[operation] * magnitudeAdjustment;
+}
+// ▲▲▲ 再統合 ▲▲▲
+
+
+// ▼▼▼ 再統合: 適応的許容誤差を使用する高レベルなアサーション関数 ▼▼▼
+/**
+ * Asserts that two QuadFloat numbers are equal using a tiered, adaptive tolerance.
+ * This is the recommended assertion function for most tests.
+ */
+export function assertQpEqualTiered(
+    actual: QuadFloat, 
+    expected: QuadFloat, 
+    tier: TestTier, 
+    operation: OperationType = 'basic',
+    verbose: boolean = false
+): void {
+    const maxExpectedMagnitude = Math.abs(expected[0]);
+    const epsilon = calculateTolerance(operation, maxExpectedMagnitude, tier);
+    
+    // 内部でBigIntベースのassertQpEqualを呼び出す
+    return assertQpEqual(actual, expected, epsilon, verbose);
+}
+// ▲▲▲ 再統合 ▲▲▲

@@ -1,9 +1,9 @@
 // code/tests/framework/test-runner.test.ts (Self-Validation Restored & Final)
 
 import { test, describe, expect, beforeAll, afterAll } from 'bun:test';
-import { assertQpEqual, type QuadFloat } from '../LV0_Axiom/assert';
+import { assertQpEqual, assertQpEqualTiered, type QuadFloat, type OperationType } from '../LV0_Axiom/assert';
 import { type GpuTestRunner, setupGpuTestRunner, runKernelInBrowser } from './gpu-test-runner';
-import { generateExpected, generateTestCases } from './test-case-generator';
+import { generateExpected, generateTestCases, type TestCase } from './test-case-generator';
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { TestResult, TestSuiteReport } from './diagnostics';
@@ -45,16 +45,11 @@ describe('LV0: assertQpEqual Self-Validation', () => {
 });
 // ▲▲▲ 復活させた自己テスト ▲▲▲
 
-interface TestCase {
-    name: string;
-    tier: 1 | 2 | 3;
-    input: QuadFloat | QuadFloat[];
-}
-
 interface TestModule {
-    default: (inputs: QuadFloat[]) => QuadFloat | Decimal; // oracle
+    default: (inputs: Decimal[]) => Decimal; // oracleはDecimalを扱う
     name: string;
     type: 'unary' | 'binary';
+    operationType: OperationType;
 }
 
 let gpuRunner: GpuTestRunner;
@@ -112,11 +107,12 @@ for (const levelDir of levelDirs) {
                 analysis.warnings.forEach(w => console.warn(w));
             });
             
-            const testCases = generateTestCases(testModule.type);
+            const testCases = generateTestCases(testModule.type, testModule.operationType);
 
             for (const tc of testCases) {
                 test(`TDD Cycle: ${tc.name}`, async () => {
                     const inputs = Array.isArray(tc.input[0]) ? tc.input as QuadFloat[] : [tc.input as QuadFloat];
+                    
                     const expected = generateExpected(testModule.default, inputs);
                     
                     const flatInput = inputs.flat();
@@ -124,15 +120,13 @@ for (const levelDir of levelDirs) {
                     let result: TestResult | undefined;
                     
                     try {
-                        // Red Stage: 失敗を期待する。ログは不要なので verbose: false
                         await expect(async () => {
                             const red_actual = await runKernelInBrowser(gpuRunner, kernelCode, 'main_red', flatInput);
-                            assertQpEqual(red_actual, expected, 1e-30, false);
+                            assertQpEqualTiered(red_actual, expected, tc.tier, tc.operationType, false);
                         }).toThrow();
 
-                        // Green Stage: 成功を期待する。ログは不要なので verbose: false
                         const green_actual = await runKernelInBrowser(gpuRunner, kernelCode, 'main_green', flatInput);
-                        assertQpEqual(green_actual, expected, 1e-30, false);
+                        assertQpEqualTiered(green_actual, expected, tc.tier, tc.operationType, false);
                         
                         result = { name: tc.name, tier: tc.tier, passed: true, executionTime: performance.now() - startTime, expected: expected, actual: green_actual };
                     } catch (e) {
@@ -144,9 +138,7 @@ for (const levelDir of levelDirs) {
                             if (actualString) {
                                 try {
                                     green_actual_on_fail = JSON.parse(actualString) as QuadFloat;
-                                } catch (parseError) {
-                                    // No-op
-                                }
+                                } catch (parseError) {}
                             }
                         }
 

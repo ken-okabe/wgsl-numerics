@@ -1,17 +1,20 @@
-import type { QuadFloat } from '../../../tests/LV0_Axiom/assert';
+// code/src/LV2_Primitives/qp_negate/index.ts (Corrected)
+
+import type { OperationType } from '../../../tests/LV0_Axiom/assert';
+import { Decimal } from 'decimal.js';
 
 // メタデータ
 export const name = 'qp_negate';
 export const type = 'unary' as const;
+export const operationType = 'basic' as OperationType;
 
-// 神託関数（ロジック）をデフォルトエクスポートする
-export default (inputs: QuadFloat[]): QuadFloat => {
-    // ▼▼▼ 修正箇所 ▼▼▼
+// ▼▼▼ 修正箇所: 神託関数がDecimalを扱うようにする ▼▼▼
+export default (inputs: Decimal[]): Decimal => {
     const input = inputs[0];
     if (!input) {
         throw new Error("Invalid input for qp_negate oracle: input array is empty.");
     }
-    // ▲▲▲ 修正箇所 ▲▲▲
-
-    return [-input[0], -input[1], -input[2], -input[3]];
+    
+    return input.negated();
 };
+// ▲▲▲ 修正箇所 ▲▲▲
